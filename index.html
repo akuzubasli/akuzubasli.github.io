@@ -135,35 +135,389 @@ $(document).ready(function () {
 <div id="descriptrive-statistics" class="section level2">
 <h2>2. Descriptrive Statistics</h2>
 </div>
-<div id="classification-methods-implemented" class="section level2">
-<h2>3. Classification Methods Implemented:</h2>
+<div id="classification-methods" class="section level2">
+<h2>3. Classification Methods</h2>
 <p>Secondly, we import the training, test and validation splits of ECC datasets.</p>
+<pre class="r"><code>library(ade4)
+library(data.table)
+
+#READ DATA
+TRAIN = read.csv(&quot;./ECC_train.csv&quot;)
+VALIDATION = read.csv(&quot;./ECC_validation.csv&quot;)
+TEST = read.csv(&quot;./ECC_test.csv&quot;)
+
+#COMBINE ALL DATA TO HAVE CONSISTENT 
+ALL_DATA &lt;- rbind(TRAIN, VALIDATION, TEST)
+ALL_DATA_x &lt;- ALL_DATA[,1:35]
+ALL_DATA_y &lt;- ALL_DATA[36]
+
+#APPLY ONE HOT METHOD TO CATEGORICAL AND NULL(999) INVOLVING FEATURES
+col_names &lt;- c(&quot;CITY&quot;, &quot;CHILD_ETHNICITY&quot;, &quot;MOTHER_ETHNICITY&quot;, &quot;BREASTFEEDING_FREQUENCY&quot;, &quot;BREASTFEEDING_DURING_NIGHT&quot;, &quot;MOTHER_EMPLOYMENT_STATUS&quot;)
+for (f in col_names){
+  df_all_dummy = acm.disjonctif(ALL_DATA_x[f])
+  ALL_DATA_x[f] = NULL
+  ALL_DATA_x = cbind(ALL_DATA_x, df_all_dummy)
+}
+
+#DELETE .999 FEATURES
+col_names999 &lt;- c(&quot;MOTHER_ETHNICITY.999&quot;, &quot;BREASTFEEDING_FREQUENCY.999&quot;, &quot;BREASTFEEDING_DURING_NIGHT.999&quot;)
+for (f in col_names999){
+  ALL_DATA_x[f] = NULL
+}
+
+#NORMALIZATION FUNCTION
+normalize &lt;- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+
+#APPLY NORMALIZATION
+ALL_DATA_x &lt;- as.data.frame(lapply(ALL_DATA_x, normalize))</code></pre>
 <div id="association-rule-mining-implemented-on-the-paper" class="section level3">
 <h3>3.1. Association Rule Mining (implemented on the paper)</h3>
+<pre class="r"><code>col_names &lt;- colnames(TRAIN)
+TRAIN_factor &lt;- as.data.frame(lapply(TRAIN[,col_names], factor))
+
+rules1 &lt;- apriori(TRAIN_factor, appearance = list(rhs=c(&quot;ECC=1&quot;), default=&quot;lhs&quot;), parameter = list(minlen=2, maxlen=7, sup = 0.1, conf = 0.4, target=&quot;rules&quot;))</code></pre>
+<pre><code>## Apriori
+## 
+## Parameter specification:
+##  confidence minval smax arem  aval originalSupport maxtime support minlen
+##         0.4    0.1    1 none FALSE            TRUE       5     0.1      2
+##  maxlen target   ext
+##       7  rules FALSE
+## 
+## Algorithmic control:
+##  filter tree heap memopt load sort verbose
+##     0.1 TRUE TRUE  FALSE TRUE    2    TRUE
+## 
+## Absolute minimum support count: 23 
+## 
+## set item appearances ...[1 item(s)] done [0.00s].
+## set transactions ...[125 item(s), 239 transaction(s)] done [0.00s].
+## sorting and recoding items ... [93 item(s)] done [0.00s].
+## creating transaction tree ... done [0.00s].
+## checking subsets of size 1 2 3 4 5 6 7</code></pre>
+<pre><code>## Warning in apriori(TRAIN_factor, appearance = list(rhs = c(&quot;ECC=1&quot;),
+## default = &quot;lhs&quot;), : Mining stopped (maxlen reached). Only patterns up to a
+## length of 7 returned!</code></pre>
+<pre><code>##  done [1.46s].
+## writing ... [125 rule(s)] done [0.07s].
+## creating S4 object  ... done [0.11s].</code></pre>
+<pre class="r"><code>rules1&lt;-sort(rules1, decreasing=TRUE, by=&quot;confidence&quot;)
+#inspect(rules1)
+
+rules2 &lt;- apriori(TRAIN_factor, appearance = list(rhs=c(&quot;ECC=2&quot;), default=&quot;lhs&quot;), parameter = list(minlen=2, maxlen=7, sup = 0.3, conf = 0.8, target=&quot;rules&quot;))</code></pre>
+<pre><code>## Apriori
+## 
+## Parameter specification:
+##  confidence minval smax arem  aval originalSupport maxtime support minlen
+##         0.8    0.1    1 none FALSE            TRUE       5     0.3      2
+##  maxlen target   ext
+##       7  rules FALSE
+## 
+## Algorithmic control:
+##  filter tree heap memopt load sort verbose
+##     0.1 TRUE TRUE  FALSE TRUE    2    TRUE
+## 
+## Absolute minimum support count: 71 
+## 
+## set item appearances ...[1 item(s)] done [0.00s].
+## set transactions ...[125 item(s), 239 transaction(s)] done [0.00s].
+## sorting and recoding items ... [47 item(s)] done [0.00s].
+## creating transaction tree ... done [0.00s].
+## checking subsets of size 1 2 3 4 5 6 7</code></pre>
+<pre><code>## Warning in apriori(TRAIN_factor, appearance = list(rhs = c(&quot;ECC=2&quot;),
+## default = &quot;lhs&quot;), : Mining stopped (maxlen reached). Only patterns up to a
+## length of 7 returned!</code></pre>
+<pre><code>##  done [0.02s].
+## writing ... [246 rule(s)] done [0.00s].
+## creating S4 object  ... done [0.00s].</code></pre>
+<pre class="r"><code>rules2&lt;-sort(rules2, decreasing=TRUE, by=&quot;confidence&quot;)
+#inspect(rules2)</code></pre>
 <div id="justification-for-model-parameters" class="section level4">
 <h4>Justification for Model Parameters</h4>
 </div>
 </div>
 <div id="svm" class="section level3">
 <h3>3.2. SVM</h3>
+<pre class="r"><code>#SEPARATE TRAIN, VALIDATION AND TEST
+TRAIN_conv_x &lt;- ALL_DATA_x[1:239,]
+VALIDATION_conv_x &lt;- ALL_DATA_x[240:273,]
+TEST_conv_x &lt;- ALL_DATA_x[274:341,]
+
+TRAIN_y &lt;- TRAIN[,36]
+TRAIN_y &lt;- as.factor(TRAIN_y)
+VALIDATION_y &lt;- VALIDATION[,36]
+VALIDATION_y &lt;- as.factor(VALIDATION_y)
+TEST_y &lt;- TEST[,36]
+TEST_y &lt;- as.factor(TEST_y)
+
+#POSSIBLE COST AND GAMMA VALUES
+cost_try = c(0.1, 0.5, 1, 5, 10, 20, 50, 80, 100, 500)
+gamma_try = c(0.005, 0.01, 0.02, 0.05, 0.1, 0.5, 1, 2, 5, 10)
+
+#BEST COST AND GAMMA VALUES SELECTED ACCORDING TO ACCURACY
+max_accur = 0
+best_cost = 1
+best_gamma = 1
+for (i in 1:10)
+{
+  for (j in 1:10)
+  {
+    svm_model &lt;- svm(x = TRAIN_conv_x, y = TRAIN_y, gamma = gamma_try[j], cost = cost_try[i])
+    svm_res &lt;- predict(svm_model, VALIDATION_conv_x)
+    conf_res &lt;- confusionMatrix(svm_res, VALIDATION_y)
+    
+    if (max_accur &lt; conf_res$overall[1])
+    {
+      max_accur = conf_res$overall[1]
+      best_cost = cost_try[i]
+      best_gamma = gamma_try[j]
+      print(conf_res$overall[1])
+    }
+  }
+}</code></pre>
+<pre><code>##  Accuracy 
+## 0.6764706 
+##  Accuracy 
+## 0.7058824 
+##  Accuracy 
+## 0.7647059</code></pre>
+<pre class="r"><code>#BEST VALUES PRINTED
+print(best_cost)</code></pre>
+<pre><code>## [1] 5</code></pre>
+<pre class="r"><code>print(best_gamma)</code></pre>
+<pre><code>## [1] 0.01</code></pre>
+<pre class="r"><code>#TEST DATASET IS PREDICTED AND RESULTS ARE DISPLAYED
+svm_model &lt;- svm(x = TRAIN_conv_x, y = TRAIN_y, gamma = best_gamma, cost = best_cost)
+svm_res &lt;- predict(svm_model, TEST_conv_x)
+conf_res &lt;- confusionMatrix(svm_res, TEST_y)
+print(conf_res)</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction  1  2
+##          1  5  2
+##          2 17 44
+##                                           
+##                Accuracy : 0.7206          
+##                  95% CI : (0.5985, 0.8227)
+##     No Information Rate : 0.6765          
+##     P-Value [Acc &gt; NIR] : 0.261543        
+##                                           
+##                   Kappa : 0.2236          
+##  Mcnemar's Test P-Value : 0.001319        
+##                                           
+##             Sensitivity : 0.22727         
+##             Specificity : 0.95652         
+##          Pos Pred Value : 0.71429         
+##          Neg Pred Value : 0.72131         
+##              Prevalence : 0.32353         
+##          Detection Rate : 0.07353         
+##    Detection Prevalence : 0.10294         
+##       Balanced Accuracy : 0.59190         
+##                                           
+##        'Positive' Class : 1               
+## </code></pre>
 <div id="justification-for-model-parameters-1" class="section level4">
 <h4>Justification for Model Parameters</h4>
 </div>
 </div>
 <div id="knn" class="section level3">
 <h3>3.3. KNN</h3>
+<pre class="r"><code>#SEPARATE TRAIN, VALIDATION AND TEST
+TRAIN_conv_x &lt;- ALL_DATA_x[1:239,]
+VALIDATION_conv_x &lt;- ALL_DATA_x[240:273,]
+TEST_conv_x &lt;- ALL_DATA_x[274:341,]
+
+TRAIN_y &lt;- TRAIN[,36]
+TRAIN_y &lt;- as.factor(TRAIN_y)
+VALIDATION_y &lt;- VALIDATION[,36]
+VALIDATION_y &lt;- as.factor(VALIDATION_y)
+TEST_y &lt;- TEST[,36]
+TEST_y &lt;- as.factor(TEST_y)
+
+#BEST K VALUE IS SELECTED ACCORDING TO ACCURACY
+max_accur = 0
+best_k_val = 1
+for (i in 1:100)
+{
+  test_pred &lt;- knn(train = TRAIN_conv_x, test = VALIDATION_conv_x, cl = TRAIN_y, k=i)
+  conf_res &lt;- confusionMatrix(test_pred, VALIDATION_y)
+  
+  if (max_accur &lt; conf_res$overall[1])
+  {
+    max_accur = conf_res$overall[1]
+    best_k_val = i
+    print(conf_res$overall[1])
+  }
+}</code></pre>
+<pre><code>##  Accuracy 
+## 0.7058824 
+##  Accuracy 
+## 0.7352941</code></pre>
+<pre class="r"><code>#BEST VALUES PRINTED
+print(best_k_val)</code></pre>
+<pre><code>## [1] 2</code></pre>
+<pre class="r"><code>#TEST DATASET IS PREDICTED AND RESULTS ARE DISPLAYED
+test_pred &lt;- knn(train = TRAIN_conv_x, test = TEST_conv_x, cl = TRAIN_y, k=best_k_val)
+conf_res &lt;- confusionMatrix(test_pred, TEST_y)
+print(conf_res)</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction  1  2
+##          1  8 12
+##          2 14 34
+##                                           
+##                Accuracy : 0.6176          
+##                  95% CI : (0.4918, 0.7329)
+##     No Information Rate : 0.6765          
+##     P-Value [Acc &gt; NIR] : 0.8774          
+##                                           
+##                   Kappa : 0.1053          
+##  Mcnemar's Test P-Value : 0.8445          
+##                                           
+##             Sensitivity : 0.3636          
+##             Specificity : 0.7391          
+##          Pos Pred Value : 0.4000          
+##          Neg Pred Value : 0.7083          
+##              Prevalence : 0.3235          
+##          Detection Rate : 0.1176          
+##    Detection Prevalence : 0.2941          
+##       Balanced Accuracy : 0.5514          
+##                                           
+##        'Positive' Class : 1               
+## </code></pre>
 <div id="justification-for-model-parameters-2" class="section level4">
 <h4>Justification for Model Parameters</h4>
 </div>
 </div>
 <div id="naive-bayesian" class="section level3">
 <h3>3.4. Naive Bayesian</h3>
+<pre class="r"><code>#SEPARATE TEST
+TEST_conv_x &lt;- ALL_DATA_x[274:341,]
+TEST_y &lt;- TEST[,36]
+TEST_y &lt;- as.factor(TEST_y)
+
+#VALIDATION COMBINED WITH TRAIN
+TV_conv_x &lt;- ALL_DATA_x[1:273,]
+TV_y &lt;- c(TRAIN_y, VALIDATION_y)
+TV_y &lt;- as.factor(TV_y)
+
+#BECAUSE OF NO PARAMETER SELECTION, NB APPLIED DIRECTLY
+nb_model &lt;- naiveBayes(x = TV_conv_x, y = TV_y, laplace = laplace)
+nb_res &lt;- predict(nb_model, TEST_conv_x)
+conf_res &lt;- confusionMatrix(nb_res, TEST_y)
+print(conf_res)</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction  1  2
+##          1 15 28
+##          2  7 18
+##                                           
+##                Accuracy : 0.4853          
+##                  95% CI : (0.3622, 0.6097)
+##     No Information Rate : 0.6765          
+##     P-Value [Acc &gt; NIR] : 0.9996453       
+##                                           
+##                   Kappa : 0.0585          
+##  Mcnemar's Test P-Value : 0.0007232       
+##                                           
+##             Sensitivity : 0.6818          
+##             Specificity : 0.3913          
+##          Pos Pred Value : 0.3488          
+##          Neg Pred Value : 0.7200          
+##              Prevalence : 0.3235          
+##          Detection Rate : 0.2206          
+##    Detection Prevalence : 0.6324          
+##       Balanced Accuracy : 0.5366          
+##                                           
+##        'Positive' Class : 1               
+## </code></pre>
 <div id="justification-for-model-parameters-3" class="section level4">
 <h4>Justification for Model Parameters</h4>
 </div>
 </div>
 <div id="random-forest" class="section level3">
 <h3>3.5. Random Forest</h3>
+<pre class="r"><code>#SEPARATE TRAIN, VALIDATION AND TEST
+TRAIN_conv_x &lt;- ALL_DATA_x[1:239,]
+VALIDATION_conv_x &lt;- ALL_DATA_x[240:273,]
+TEST_conv_x &lt;- ALL_DATA_x[274:341,]
+
+TRAIN_y &lt;- TRAIN[,36]
+TRAIN_y &lt;- as.factor(TRAIN_y)
+VALIDATION_y &lt;- VALIDATION[,36]
+VALIDATION_y &lt;- as.factor(VALIDATION_y)
+TEST_y &lt;- TEST[,36]
+TEST_y &lt;- as.factor(TEST_y)
+
+#BEST NTREE VALUE IS SELECTED ACCORDING TO ACCURACY
+max_accur = 0
+res_num_of_tree = 0
+num_of_tree = 16
+for (i in 1:7)
+{
+  set.seed(97)
+  
+  rf_model &lt;- randomForest(x = TRAIN_conv_x, y = TRAIN_y, ntree = num_of_tree)
+  rf_res &lt;- predict(rf_model, VALIDATION_conv_x)
+  rf_res_round &lt;- as.factor(round(as.numeric(rf_res)))
+  conf_res &lt;- confusionMatrix(rf_res_round, VALIDATION_y)
+  
+  if (conf_res$overall[1] &gt; max_accur)
+  {
+    max_accur = conf_res$overall[1]
+    res_num_of_tree = num_of_tree
+    print(conf_res$overall[1])
+  }
+  
+  num_of_tree = num_of_tree*2
+}</code></pre>
+<pre><code>##  Accuracy 
+## 0.5882353 
+##  Accuracy 
+## 0.6470588 
+##  Accuracy 
+## 0.6764706</code></pre>
+<pre class="r"><code>#BEST VALUES PRINTED
+print(res_num_of_tree)</code></pre>
+<pre><code>## [1] 64</code></pre>
+<pre class="r"><code>#TEST DATASET IS PREDICTED AND RESULTS ARE DISPLAYED
+set.seed(97)
+rf_res_model &lt;- randomForest(x = TRAIN_conv_x, y = TRAIN_y, ntree = res_num_of_tree)
+rf_res &lt;- predict(rf_model, TEST_conv_x)
+rf_res_round &lt;- as.factor(round(as.numeric(rf_res)))
+conf_res &lt;- confusionMatrix(rf_res_round, TEST_y)
+print(conf_res)</code></pre>
+<pre><code>## Confusion Matrix and Statistics
+## 
+##           Reference
+## Prediction  1  2
+##          1  4  2
+##          2 18 44
+##                                           
+##                Accuracy : 0.7059          
+##                  95% CI : (0.5829, 0.8102)
+##     No Information Rate : 0.6765          
+##     P-Value [Acc &gt; NIR] : 0.3537252       
+##                                           
+##                   Kappa : 0.1707          
+##  Mcnemar's Test P-Value : 0.0007962       
+##                                           
+##             Sensitivity : 0.18182         
+##             Specificity : 0.95652         
+##          Pos Pred Value : 0.66667         
+##          Neg Pred Value : 0.70968         
+##              Prevalence : 0.32353         
+##          Detection Rate : 0.05882         
+##    Detection Prevalence : 0.08824         
+##       Balanced Accuracy : 0.56917         
+##                                           
+##        'Positive' Class : 1               
+## </code></pre>
 <div id="justification-for-model-parameters-4" class="section level4">
 <h4>Justification for Model Parameters</h4>
 </div>
